@@ -59,12 +59,7 @@ docker run -it -p 1883:1883 eclipse-mosquitto
 ### Subir MySQL
 
 ``` bash
-docker run -d \
-  --name mysql-industrial \
-  -e MYSQL_ROOT_PASSWORD=root \
-  -e MYSQL_DATABASE=industrial \
-  -p 3306:3306 \
-  mysql:5.7
+docker run -d \  --name mysql-industrial \  -e MYSQL_ROOT_PASSWORD=root \  -e MYSQL_DATABASE=industrial \  -p 3306:3306 \  mysql:5.7
 ```
 
 ------------------------------------------------------------------------
