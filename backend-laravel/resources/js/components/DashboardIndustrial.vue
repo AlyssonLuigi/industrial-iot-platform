@@ -1,6 +1,6 @@
 <template>
   <div class="container">
-    <h1>🏭 Dashboard Industrial</h1>
+    <h1 style="color: white !important;">🏭 Dashboard Industrial</h1>
 
     <!-- STATUS -->
     <div class="status-card" :class="statusClass">
