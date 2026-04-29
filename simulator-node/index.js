@@ -45,12 +45,12 @@ client.on("connect", () => {
         const totalProduced = goodCount + rejectCount;
 
         // OEE cálculo simplificado
-        const availability = state === "RUNNING" ? 1 : 0;
-        const performance = totalProduced > 0 
-            ? (productionCount / (idealCycleTime * totalProduced))
+        const availability = ["RUNNING"].includes(state) ? 1 : 0.5;
+        const performance = state === "RUNNING"
+            ? Math.min(produced / idealCycleTime, 1)
             : 0;
 
-        const quality = totalProduced > 0 
+        const quality = totalProduced > 0
             ? (goodCount / totalProduced)
             : 0;
 
@@ -64,8 +64,7 @@ client.on("connect", () => {
             total_production: productionCount,
             good_count: goodCount,
             reject_count: rejectCount,
-            temperature: (20 + Math.random() * 15).toFixed(2),
-            vibration: (Math.random() * 5).toFixed(2),
+            temperature: Number((20 + Math.random() * 15).toFixed(2)), vibration: (Math.random() * 5).toFixed(2),
             availability: availability,
             performance: performance.toFixed(2),
             quality: quality.toFixed(2),

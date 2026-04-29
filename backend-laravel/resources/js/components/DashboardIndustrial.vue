@@ -4,102 +4,157 @@
 
     <!-- STATUS -->
     <div class="status-card" :class="statusClass">
-      <h2>Status: {{ latest.state }}</h2>
+      <h2>Status: {{ latest?.state || 'N/A' }}</h2>
     </div>
 
     <!-- OEE -->
     <div class="cards">
-      <div class="card">OEE: {{ oee.oee }}%</div>
-      <div class="card">Disponibilidade: {{ oee.availability }}</div>
-      <div class="card">Performance: {{ oee.performance }}</div>
-      <div class="card">Qualidade: {{ oee.quality }}</div>
+      <div class="card">OEE: {{ oee?.oee ? (oee.oee * 100).toFixed(2) : 0 }}%</div>
+      <div class="card">Disponibilidade: {{ oee?.availability ? (oee.availability * 100).toFixed(2) : 0 }}%</div>
+      <div class="card">Performance: {{ oee?.performance ? (oee.performance * 100).toFixed(2) : 0 }}%</div>
+      <div class="card">Qualidade: {{ oee?.quality ? (oee.quality * 100).toFixed(2) : 0 }}%</div>
     </div>
 
     <!-- GRÁFICO -->
-    <canvas id="oeeChart"></canvas>
+    <canvas ref="oeeChart"></canvas>
   </div>
 </template>
 
 <script>
-import axios from "axios";
-import Chart from "chart.js/auto";
+import axios from "axios"
+import Chart from "chart.js/auto"
+import echo from "@/echo"
+import { nextTick } from "vue"
+import { markRaw } from "vue"
 
 export default {
   data() {
     return {
+      lastUpdate: 0,
       latest: {},
       oee: {},
       chart: null,
-      chartData: []
-    };
+    }
   },
 
   computed: {
     statusClass() {
-      switch (this.latest.state) {
+      switch (this.latest?.state) {
         case "RUNNING":
-          return "running";
+          return "running"
         case "STOPPED":
-          return "stopped";
+          return "stopped"
         case "FAULT":
-          return "fault";
+          return "fault"
         default:
-          return "";
+          return "unknown"
       }
     }
   },
-
   methods: {
     async fetchData() {
       try {
-        const latestRes = await axios.get("/api/machine-events/latest");
-        const oeeRes = await axios.get("/api/machine-events/oee");
+        const [latestRes, oeeRes] = await Promise.all([
+          axios.get("/api/machine-events/latest"),
+          axios.get("/api/machine-events/oee")
+        ])
 
-        this.latest = latestRes.data;
-        this.oee = oeeRes.data;
+        this.latest = latestRes.data || {}
+        this.oee = oeeRes.data || {}
 
-        this.updateChart(oeeRes.data.oee);
-
-      } catch (e) {
-        console.error("Erro ao buscar dados", e);
+      } catch (error) {
+        console.error("Erro ao buscar dados:", error)
       }
     },
 
-    updateChart(value) {
-      this.chartData.push(value);
+    initChart() {
+      const canvas = this.$refs.oeeChart
+      if (!canvas) return
 
-      if (this.chartData.length > 20) {
-        this.chartData.shift();
+      const ctx = canvas.getContext("2d")
+
+      if (this.chart) {
+        this.chart.destroy()
       }
 
-      this.chart.data.labels = this.chartData.map((_, i) => i);
-      this.chart.data.datasets[0].data = this.chartData;
-      this.chart.update();
-    }
+      const chartInstance = new Chart(ctx, {
+        type: "line",
+        data: {
+          labels: [],
+          datasets: [
+            {
+              label: "OEE",
+              data: [],
+              borderColor: "#00ff9d",
+              backgroundColor: "rgba(0,255,157,0.2)",
+              borderWidth: 2,
+              tension: 0.3,
+              fill: true,
+              pointRadius: 0
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          animation: false
+        }
+      })
+
+      // 🔥 ESSA LINHA RESOLVE TUDO
+      this.chart = markRaw(chartInstance)
+    },
+
+    updateChart(value) {
+      const now = Date.now()
+
+      if (now - this.lastUpdate < 300) return
+      this.lastUpdate = now
+
+      if (!this.chart) return
+
+      const dataset = this.chart.data.datasets[0].data
+
+      dataset.push(value)
+
+      if (dataset.length > 20) dataset.shift()
+
+      this.chart.data.labels = dataset.map((_, i) => i + 1)
+
+      this.chart.update()
+    },
   },
 
-  mounted() {
-    const ctx = document.getElementById("oeeChart");
+  
+  async mounted() {
+    await nextTick()
 
-    this.chart = new Chart(ctx, {
-      type: "line",
-      data: {
-        labels: [],
-        datasets: [{
-          label: "OEE",
-          data: [],
-          borderWidth: 2
-        }]
+    this.initChart()
+    this.fetchData()
+
+    echo.channel("machine-events")
+    .listen(".machine.updated", (e) => {
+
+      this.oee = e.data
+      this.latest = e.data
+
+      const value = Number(e.data.oee)
+
+      if (!isNaN(value)) {
+        this.updateChart(value)
       }
-    });
+    })
+},
 
-    this.fetchData();
+  beforeUnmount() {
+    if (this.interval) {
+      clearInterval(this.interval)
+    }
 
-    setInterval(() => {
-      this.fetchData();
-    }, 2000);
+    if (this.chart) {
+      this.chart.destroy()
+    }
   }
-};
+}
 </script>
 
 <style>
@@ -107,24 +162,31 @@ export default {
   padding: 20px;
   font-family: Arial;
 }
-
+canvas {
+  height: 300px !important;
+}
 .status-card {
   padding: 20px;
   margin-bottom: 20px;
   color: white;
   font-weight: bold;
+  border-radius: 8px;
 }
 
 .running {
-  background: green;
+  background: #2ecc71;
 }
 
 .stopped {
-  background: orange;
+  background: #f39c12;
 }
 
 .fault {
-  background: red;
+  background: #e74c3c;
+}
+
+.unknown {
+  background: #7f8c8d;
 }
 
 .cards {
@@ -134,8 +196,32 @@ export default {
 }
 
 .card {
-  background: #eee;
+  background: #f2f2f2;
   padding: 15px;
-  border-radius: 5px;
+  border-radius: 8px;
+  flex: 1;
+  text-align: center;
+}
+.fault {
+  background: #e74c3c;
+  animation: blink 1s infinite;
+}
+
+@keyframes blink {
+  50% { opacity: 0.3; }
+}
+.running {
+  background: #2ecc71;
+  box-shadow: 0 0 20px #2ecc71;
+}
+.card {
+  background: #111;
+  color: #00ff9d;
+  font-family: monospace;
+  border: 1px solid #1f2a38;
+}
+.container {
+  background: #0b0f14;
+  min-height: 100vh;
 }
 </style>

@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
 use PhpMqtt\Client\MqttClient;
+use App\Events\MachineEventUpdated;
 use App\Models\MachineEvent;
 use Carbon\Carbon;
 
@@ -14,42 +15,59 @@ class ConsumeMqtt extends Command
 
     public function handle()
     {
-        $mqtt = new MqttClient('localhost', 1883, 'laravel-consumer');
-        $mqtt->connect();
+        $this->info("🚀 Iniciando consumer MQTT...");
 
-        $this->info("📡 Conectado ao MQTT, escutando eventos...");
-
-        $mqtt->subscribe('factory/machine/events', function ($topic, $message) {
-
-            echo "📥 CHEGOU EVENTO\n";
-
-            $data = json_decode($message, true);
-
+        while (true) {
             try {
+                $mqtt = new MqttClient('127.0.0.1', 1883, 'laravel-consumer');
 
-                MachineEvent::create([
-                    'machine_id' => $data['machine_id'],
-                    'state' => $data['state'],
-                    'produced' => $data['produced'],
-                    'rejected' => $data['rejected'],
-                    'total_production' => $data['total_production'],
-                    'good_count' => $data['good_count'],
-                    'reject_count' => $data['reject_count'],
-                    'temperature' => (float) $data['temperature'],
-                    'vibration' => (float) $data['vibration'],
-                    'availability' => (float) $data['availability'],
-                    'performance' => (float) $data['performance'],
-                    'quality' => (float) $data['quality'],
-                    'oee' => (float) $data['oee'],
-                    'event_time' => \Carbon\Carbon::parse($data['timestamp']),
-                ]);
+                $mqtt->connect();
+                $this->info("📡 Conectado ao MQTT");
 
-                echo "✅ SALVO\n";
+                $mqtt->subscribe('factory/machine/events', function ($topic, $message) {
+
+                    $this->line("📥 Evento recebido");
+
+                    $data = json_decode($message, true);
+
+                    // Validação básica
+                    if (!$data || !isset($data['machine_id'], $data['timestamp'])) {
+                        $this->error("⚠️ Payload inválido: " . $message);
+                        return;
+                    }
+
+                    try {
+                        MachineEvent::create([
+                            'machine_id' => $data['machine_id'],
+                            'state' => $data['state'] ?? 'UNKNOWN',
+                            'produced' => (int) ($data['produced'] ?? 0),
+                            'rejected' => (int) ($data['rejected'] ?? 0),
+                            'total_production' => (int) ($data['total_production'] ?? 0),
+                            'good_count' => (int) ($data['good_count'] ?? 0),
+                            'reject_count' => (int) ($data['reject_count'] ?? 0),
+                            'temperature' => (float) ($data['temperature'] ?? 0),
+                            'vibration' => (float) ($data['vibration'] ?? 0),
+                            'availability' => (float) ($data['availability'] ?? 0),
+                            'performance' => (float) ($data['performance'] ?? 0),
+                            'quality' => (float) ($data['quality'] ?? 0),
+                            'oee' => (float) ($data['oee'] ?? 0),
+                            'event_time' => Carbon::parse($data['timestamp']),
+                        ]);
+                        event(new MachineEventUpdated($data));
+                        $this->info("✅ Evento salvo com sucesso");
+                        $this->info("📡 Evento broadcast enviado");
+                    } catch (\Throwable $e) {
+                        $this->error("❌ Erro ao salvar: " . $e->getMessage());
+                    }
+                }, 0);
+
+                // Loop principal
+                $mqtt->loop(true);
             } catch (\Throwable $e) {
-                echo "❌ ERRO: " . $e->getMessage() . "\n";
+                $this->error("🔥 Erro de conexão: " . $e->getMessage());
+                $this->warn("⏳ Tentando reconectar em 3 segundos...");
+                sleep(3);
             }
-        }, 0);
-
-        $mqtt->loop(true, true);
+        }
     }
 }

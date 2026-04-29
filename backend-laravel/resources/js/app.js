@@ -1,8 +1,4 @@
-import { createApp } from 'vue';
-import DashboardIndustrial from './components/DashboardIndustrial.vue';
+import { createApp } from 'vue'
+import DashboardIndustrial from './components/DashboardIndustrial.vue'
 
-createApp({
-    components: {
-        DashboardIndustrial
-    }
-}).mount('#app');
+createApp(DashboardIndustrial).mount('#app')

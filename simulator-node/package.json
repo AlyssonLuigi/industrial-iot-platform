@@ -10,7 +10,9 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@vitejs/plugin-vue": "^6.0.6",
     "axios": "^1.15.2",
+    "modbus-serial": "^8.0.25",
     "mqtt": "^5.15.1"
   }
 }
