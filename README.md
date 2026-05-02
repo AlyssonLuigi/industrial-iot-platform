@@ -72,6 +72,7 @@ cp .env.example .env
 php artisan key:generate
 php artisan migrate
 php artisan serve
+npm run dev
 ```
 
 ------------------------------------------------------------------------
@@ -80,6 +81,9 @@ php artisan serve
 
 ``` bash
 php artisan mqtt:consume
+php artisan serve
+php artisan reverb:start
+node index.js start
 ```
 
 Tópico utilizado:
