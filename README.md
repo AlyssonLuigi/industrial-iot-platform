@@ -80,6 +80,9 @@ php artisan serve
 
 ``` bash
 php artisan mqtt:consume
+php artisan serve
+php artisan reverb:start
+node index.js start
 ```
 
 Tópico utilizado:
